@@ -9,22 +9,38 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: conda-incubator/setup-miniconda@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v2
         with:
           auto-activate-base: false
-      - name: Create conda env and install dependencies
+
+      - name: Ensure mamba available and create env
+        shell: bash -l {0}
         run: |
-          mamba create -y -n mapenv python=3.10 -c conda-forge geopandas matplotlib pyproj pandas shapely fiona rasterio
+          # 安装 mamba 到 base（有时 runner 的 base 没有 mamba）
+          conda install -n base -c conda-forge mamba -y || true
+          # 使用 mamba 创建环境（比 conda 快），若 mamba 不可用改用 conda
+          if command -v mamba >/dev/null 2>&1; then
+            mamba create -y -n mapenv python=3.10 -c conda-forge geopandas matplotlib pyproj pandas shapely fiona rasterio
+          else
+            conda create -y -n mapenv -c conda-forge python=3.10 geopandas matplotlib pyproj pandas shapely fiona rasterio
+          fi
+
       - name: Run plot script
+        shell: bash -l {0}
         run: |
-          source $(conda info --base)/etc/profile.d/conda.sh
+          source "$(conda info --base)/etc/profile.d/conda.sh"
           conda activate mapenv
+          python --version
           python scripts/plot_influence_maps_both.py
-        shell: bash -lc
+
       - name: Commit generated images back to branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash -l {0}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
